@@ -7,7 +7,7 @@ st.set_page_config(page_title="Executive Dashboard", layout="wide")
 @st.cache_data
 def load_data():
     # แก้ชื่อไฟล์ให้ตรงกับที่คุณอัพโหลดขึ้น GitHub
-    file_name = 'modern trade analysis 2.csv'
+    file_name = 'modern trade analysis 2.xlsx - sum by area.csv'
     df = pd.read_csv(file_name)
     # แปลงรูปแบบวันที่เล็กน้อย
     df['Period'] = pd.to_datetime(df['Year'].astype(str) + '-' + df['Month'].astype(str) + '-01')
