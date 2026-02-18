@@ -2,20 +2,20 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
+from sklearn.linear_model import LinearRegression
 import os
 
-# 1. หน้าจอและการตั้งค่าเบื้องต้น
-st.set_page_config(page_title="Modern Trade Insight Dashboard", page_icon="📈", layout="wide")
+# 1. Page Configuration
+st.set_page_config(page_title="Strategic Growth & Forecast Dashboard", page_icon="🚀", layout="wide")
 
-# คลุมโทนสีหลัก (Professional Palette)
-COLOR_THEME = px.colors.qualitative.Prism # โทนสีสวยสะอาดตาสำหรับข้อมูลหมวดหมู่
-SEQUENTIAL_THEME = px.colors.sequential.Tealgrn # โทนสีไล่เฉดเขียว-น้ำเงินเข้ม
+# Professional Color Palette
+C_PALETTE = ["#003f5c", "#ffa600", "#bc5090", "#58508d", "#ff6361", "#00818a"]
 
-# 2. ฟังก์ชันโหลดข้อมูล (คงเดิมแต่ปรับให้เสถียรขึ้น)
 @st.cache_data
 def load_data():
     csv_files = [f for f in os.listdir('.') if f.endswith('.csv')]
-    if not csv_files: return None, "ไม่พบไฟล์ .csv"
+    if not csv_files: return None, "No CSV found"
     target_file = next((f for f in csv_files if 'modern trade' in f.lower()), csv_files[0])
     
     for enc in ['utf-8', 'tis-620', 'cp874']:
@@ -29,106 +29,95 @@ def load_data():
             df['MonthName'] = pd.Categorical(df['MonthName'], categories=month_map.values(), ordered=True)
             return df, target_file
         except: continue
-    return None, "Error Reading File"
+    return None, "File Error"
 
-df, source_info = load_data()
+df, source = load_data()
 
 if df is not None:
-    # --- Sidebar Filter ---
-    st.sidebar.markdown("### 🔍 ค้นหาและกรองข้อมูล")
-    
-    year_list = sorted(df['Year'].unique().tolist())
-    selected_years = st.sidebar.multiselect("เลือกปีที่ต้องการเปรียบเทียบ", year_list, default=year_list)
-    
-    zone_list = sorted([x for x in df['Zone'].unique() if pd.notna(x)])
-    selected_zones = st.sidebar.multiselect("พื้นที่ (Zone)", zone_list, default=zone_list)
-    
-    branch_list = sorted([x for x in df['BrName'].unique() if pd.notna(x)])
-    selected_branches = st.sidebar.multiselect("สาขาเฉพาะที่ (Branch)", branch_list)
-    
-    prod_list = sorted([x for x in df['PrName'].unique() if pd.notna(x)])
+    # --- Sidebar ---
+    st.sidebar.title("🚀 Advanced Analytics")
+    year_list = sorted(df['Year'].unique())
+    selected_years = st.sidebar.multiselect("เลือกปีที่ต้องการดู", year_list, default=year_list)
+    prod_list = sorted(df['PrName'].unique())
     selected_products = st.sidebar.multiselect("เลือกสินค้า", prod_list, default=prod_list)
 
-    # Filter Logic
-    mask = df['Year'].isin(selected_years) & df['Zone'].isin(selected_zones) & df['PrName'].isin(selected_products)
-    if selected_branches:
-        mask = mask & df['BrName'].isin(selected_branches)
-    
+    mask = df['Year'].isin(selected_years) & df['PrName'].isin(selected_products)
     f_df = df[mask]
 
-    # --- Header ---
-    st.title("🏛️ Modern Trade Executive Insight")
-    st.markdown(f"**Data Status:** ข้อมูลผ่านการทำความสะอาดแล้วจากไฟล์ `{source_info}`")
+    st.title("🚀 Strategic Growth & Forecasting Dashboard")
+    st.markdown(f"**Data Intelligence** | Source: `{source}`")
+
+    # --- Section 1: Growth Analysis ---
+    st.divider()
+    st.subheader("📈 สาขาที่เติบโตแรงที่สุด (Year-on-Year Growth)")
     
-    # --- KPI Section (ปรับ Design) ---
-    st.markdown("---")
-    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    with kpi1:
-        st.metric("Total Revenue", f"฿{f_df['SaleAmount (ExVat)'].sum():,.0f}")
-    with kpi2:
-        st.metric("Total Quantity", f"{f_df['Qty'].sum():,.0f} Pcs")
-    with kpi3:
-        st.metric("Avg. Price/Unit", f"฿{f_df['SaleAmount (ExVat)'].sum()/f_df['Qty'].sum() if f_df['Qty'].sum()>0 else 0:,.2f}")
-    with kpi4:
-        st.metric("Active Branches", f"{f_df[f_df['Qty']>0]['BrName'].nunique()}")
-
-    # --- Main Visualization ---
-    st.markdown("### 📈 พฤติกรรมการซื้อรายเดือนเปรียบเทียบแต่ละปี (Monthly Habits)")
-    
-    habit_df = f_df.groupby(['Year', 'MonthName'])['SaleAmount (ExVat)'].sum().reset_index()
-    habit_df['Year'] = habit_df['Year'].astype(str)
-    
-    fig_line = px.line(
-        habit_df, x='MonthName', y='SaleAmount (ExVat)', color='Year',
-        markers=True, line_shape="spline", # เส้นโค้งมนดูพรีเมียม
-        color_discrete_sequence=COLOR_THEME,
-        template="plotly_white"
-    )
-    fig_line.update_layout(
-        hovermode="x unified",
-        xaxis_title="", yaxis_title="ยอดขาย (บาท)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_line, use_container_width=True)
-
-    # --- Second Row Visuals ---
-    col_a, col_b = st.columns([1, 1])
-
-    with col_a:
-        st.markdown("### 🥧 สัดส่วนสินค้าตามยอดขาย")
-        prod_sum = f_df.groupby('PrName')['SaleAmount (ExVat)'].sum().reset_index()
-        fig_pie = px.pie(
-            prod_sum, values='SaleAmount (ExVat)', names='PrName',
-            hole=0.5, color_discrete_sequence=px.colors.sequential.Teal_r
-        )
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    with col_b:
-        st.markdown("### 🏆 10 อันดับสาขาที่ทำยอดสูงสุด")
-        br_sum = f_df.groupby('BrName')['SaleAmount (ExVat)'].sum().reset_index().sort_values('SaleAmount (ExVat)', ascending=True).tail(10)
+    if len(year_list) >= 2:
+        current_year = max(year_list)
+        last_year = current_year - 1
         
-        # ใช้สีไล่เฉด (Gradient) ตามยอดขาย
-        fig_bar = px.bar(
-            br_sum, x='SaleAmount (ExVat)', y='BrName',
-            orientation='h',
-            color='SaleAmount (ExVat)', # ไล่สีตามยอดขาย
-            color_continuous_scale='Tealgrn',
-            template="plotly_white"
-        )
-        fig_bar.update_layout(coloraxis_showscale=False, showlegend=False, yaxis_title="")
-        st.plotly_chart(fig_bar, use_container_width=True)
+        growth_df = df[df['Year'].isin([last_year, current_year])].groupby(['Year', 'BrName'])['SaleAmount (ExVat)'].sum().unstack(level=0)
+        growth_df.columns = ['LastYear', 'CurrentYear']
+        growth_df['Growth_Value'] = growth_df['CurrentYear'] - growth_df['LastYear']
+        growth_df['Growth_Pct'] = (growth_df['Growth_Value'] / growth_df['LastYear']) * 100
+        
+        # กรองเฉพาะสาขาที่มีขายทั้งสองปีและตัดค่า Infinity
+        top_growth = growth_df.replace([np.inf, -np.inf], np.nan).dropna().sort_values('Growth_Pct', ascending=False).head(5)
+        
+        cols = st.columns(len(top_growth))
+        for i, (branch, row) in enumerate(top_growth.iterrows()):
+            cols[i].metric(branch, f"฿{row['CurrentYear']:,.0f}", f"{row['Growth_Pct']:.1f}% Growth")
+    else:
+        st.info("ต้องการข้อมูลอย่างน้อย 2 ปีในการวิเคราะห์การเติบโต")
 
-    # --- Data Detail Section ---
-    with st.expander("📄 ดูตารางข้อมูลสรุปรายสาขา"):
-        pivot_br = f_df.pivot_table(
-            index='BrName', 
-            columns='PrName', 
-            values='SaleAmount (ExVat)', 
-            aggfunc='sum', 
-            fill_value=0
-        )
-        st.dataframe(pivot_br.style.background_gradient(cmap='Greens'), use_container_width=True)
+    # --- Section 2: Sales Forecasting ---
+    st.divider()
+    st.subheader("🔮 การพยากรณ์ยอดขาย (3-Month Sales Forecast)")
+    
+    # เตรียมข้อมูล Time Series
+    ts_df = df.groupby(['Year', 'Month'])['SaleAmount (ExVat)'].sum().reset_index()
+    ts_df['TimeIndex'] = np.arange(len(ts_df))
+    
+    # สร้าง Model Linear Regression
+    X = ts_df[['TimeIndex']].values
+    y = ts_df['SaleAmount (ExVat)'].values
+    model = LinearRegression().fit(X, y)
+    
+    # พยากรณ์ไปข้างหน้า 3 เดือน
+    future_index = np.array([[len(ts_df)], [len(ts_df)+1], [len(ts_df)+2]])
+    future_pred = model.predict(future_index)
+    
+    # สร้างกราฟพยากรณ์
+    fig_forecast = go.Figure()
+    # ข้อมูลจริง
+    fig_forecast.add_trace(go.Scatter(x=ts_df.index, y=y, name='Actual Sales', line=dict(color='#003f5c', width=3)))
+    # เส้น Trend Line
+    fig_forecast.add_trace(go.Scatter(x=ts_df.index, y=model.predict(X), name='Trend Line', line=dict(color='#ffa600', dash='dash')))
+    # ส่วนพยากรณ์
+    fig_forecast.add_trace(go.Scatter(x=[len(ts_df)-1, len(ts_df), len(ts_df)+1, len(ts_df)+2], 
+                                     y=[y[-1], future_pred[0], future_pred[1], future_pred[2]], 
+                                     name='Forecast', line=dict(color='#ff6361', width=4)))
+    
+    fig_forecast.update_layout(template="plotly_white", xaxis_title="Timeline (Months)", yaxis_title="Sales Amount")
+    st.plotly_chart(fig_forecast, use_container_width=True)
+
+    # --- Section 3: Professional Visuals ---
+    st.divider()
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.subheader("🍩 Product Contribution")
+        p_mix = f_df.groupby('PrName')['SaleAmount (ExVat)'].sum().reset_index()
+        st.plotly_chart(px.pie(p_mix, values='SaleAmount (ExVat)', names='PrName', hole=0.5, color_discrete_sequence=C_PALETTE), use_container_width=True)
+        
+    with c2:
+        st.subheader("📍 ยอดขายรายโซน")
+        z_mix = f_df.groupby('Zone')['SaleAmount (ExVat)'].sum().reset_index()
+        st.plotly_chart(px.bar(z_mix, x='Zone', y='SaleAmount (ExVat)', color='Zone', color_discrete_sequence=C_PALETTE), use_container_width=True)
+
+    # Detailed Matrix with Heatmap
+    st.subheader("📋 Detailed Performance Matrix")
+    pivot = f_df.pivot_table(index='BrName', columns='PrName', values='SaleAmount (ExVat)', aggfunc='sum', fill_value=0)
+    st.dataframe(pivot.style.background_gradient(cmap='YlGnBu'), use_container_width=True)
 
 else:
-    st.error("ไม่สามารถแสดง Dashboard ได้ กรุณาตรวจสอบไฟล์ข้อมูล")
+    st.error("กรุณาตรวจสอบไฟล์ข้อมูลบน GitHub")
