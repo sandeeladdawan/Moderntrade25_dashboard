@@ -19,21 +19,24 @@ st.set_page_config(page_title="KOON Modern Trade Intelligence", page_icon="🟠"
 KOON_ORANGE = "#FF914D"
 ZONE_COLORS = {"City": "#003f5c", "Residential": "#bc5090", "Provincial": "#ffa600"}
 
-# Custom CSS เพื่อเปลี่ยนสี Sidebar เป็นสีส้มตามแบรนด์
+# แก้ไขจุดที่ผิด: เปลี่ยน unsafe_allow_stdio เป็น unsafe_allow_html
 st.markdown(f"""
     <style>
+    /* เปลี่ยนสี Sidebar */
     [data-testid="stSidebar"] {{
         background-color: {KOON_ORANGE};
     }}
+    /* เปลี่ยนสีข้อความใน Sidebar */
     [data-testid="stSidebar"] * {{
         color: white !important;
     }}
+    /* เปลี่ยนสี Tag ใน MultiSelect */
     .stMultiSelect [data-baseweb="tag"] {{
         background-color: white !important;
         color: {KOON_ORANGE} !important;
     }}
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 # 2. Data Engine & Cleaning
 @st.cache_data
@@ -68,8 +71,8 @@ def load_data():
 df, source = load_data()
 
 if df is not None:
-    # --- SIDEBAR FILTERS (Brand Orange) ---
-    st.sidebar.title("🟠 KOON Filters")
+    # --- SIDEBAR FILTERS ---
+    st.sidebar.title("🟠 KOON Control")
     
     year_list = sorted(df['Year'].unique())
     selected_years = st.sidebar.multiselect("ปี (Year)", year_list, default=year_list)
@@ -78,7 +81,7 @@ if df is not None:
     selected_zones = st.sidebar.multiselect("พื้นที่ (Zone)", zone_list, default=zone_list)
     
     branch_list = sorted(df['BrName'].unique())
-    selected_branches = st.sidebar.multiselect("ค้นหาชื่อสาขา (Branch)", branch_list)
+    selected_branches = st.sidebar.multiselect("ค้นหาสาขา (Branch)", branch_list)
     
     prod_list = sorted(df['PrName'].unique())
     selected_products = st.sidebar.multiselect("สินค้า (Product)", prod_list, default=prod_list)
@@ -90,37 +93,34 @@ if df is not None:
 
     # --- HEADER ---
     st.title("🟠 KOON Modern Trade Performance")
-    st.write(f"วิเคราะห์ยอดขายเชิงลึกรายสาขาและพื้นที่ | แหล่งข้อมูล: `{source}`")
+    st.write(f"วิเคราะห์พฤติกรรมผู้บริโภคและประสิทธิภาพการขาย | แหล่งข้อมูล: `{source}`")
 
-    # --- KPI CARDS ---
+    # --- KPI CARDS (ย้ายกลับมาด้านบน) ---
     st.divider()
     k1, k2, k3, k4 = st.columns(4)
     total_rev = f_df['SaleAmount (ExVat)'].sum()
     total_qty = f_df['Qty'].sum()
     k1.metric("ยอดขายรวม (ExVat)", f"฿{total_rev:,.0f}")
-    k2.metric("จำนวนที่ขายได้", f"{total_qty:,.0f} ชิ้น")
-    k3.metric("ยอดเฉลี่ย/ชิ้น", f"฿{total_rev/total_qty if total_qty > 0 else 0:,.2f}")
-    k4.metric("สาขาที่มีการเคลื่อนไหว", f"{f_df[f_df['Qty'] > 0]['BrName'].nunique()} สาขา")
+    k2.metric("จำนวนชิ้นที่ขายได้", f"{total_qty:,.0f} Pcs")
+    k3.metric("เฉลี่ยต่อชิ้น", f"฿{total_rev/total_qty if total_qty > 0 else 0:,.2f}")
+    k4.metric("จำนวนสาขาที่มีการขาย", f"{f_df[f_df['Qty'] > 0]['BrName'].nunique()} สาขา")
 
     # --- SECTION: BRANCH PERFORMANCE BY ZONE ---
     st.divider()
-    st.subheader("🥇 อันดับสาขาที่มียอดขายสูงสุด (Top Branches by Revenue)")
+    st.subheader("🥇 อันดับสาขาที่มียอดขายสูงสุด (Top Branches by Zone)")
     
-    # ดึงข้อมูล 15 อันดับสาขาแรกเพื่อให้เห็นภาพรวมที่กว้างขึ้น
+    # 15 อันดับสาขา
     br_sum = f_df.groupby(['BrName', 'Zone'])['SaleAmount (ExVat)'].sum().reset_index()
     br_sum = br_sum.sort_values('SaleAmount (ExVat)', ascending=True).tail(15)
     
     fig_br = px.bar(br_sum, x='SaleAmount (ExVat)', y='BrName', color='Zone',
-                   title="Top 15 สาขาขายดี (ระบุตาม Zone)",
-                   color_discrete_map=ZONE_COLORS, # ใช้สีประจำโซน
+                   color_discrete_map=ZONE_COLORS,
                    orientation='h',
-                   labels={'SaleAmount (ExVat)': 'ยอดขาย (บาท)', 'BrName': 'ชื่อสาขา'},
+                   labels={'SaleAmount (ExVat)': 'ยอดขาย (บาท)', 'BrName': 'สาขา'},
                    template="plotly_white")
-    
-    fig_br.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_br, use_container_width=True)
 
-    # --- SECTION: HABIT & PRODUCT MIX ---
+    # --- HABIT & PRODUCT MIX ---
     st.divider()
     col_l, col_r = st.columns(2)
 
@@ -128,19 +128,24 @@ if df is not None:
         st.subheader("📈 Monthly Habits Comparison")
         h_df = f_df.groupby(['Year', 'MonthName'])['SaleAmount (ExVat)'].sum().reset_index()
         h_df['Year'] = h_df['Year'].astype(str)
-        fig_line = px.line(h_df, x='MonthName', y='SaleAmount (ExVat)', color='Year',
-                          markers=True, line_shape="spline", color_discrete_sequence=px.colors.qualitative.Bold)
-        st.plotly_chart(fig_line, use_container_width=True)
+        st.plotly_chart(px.line(h_df, x='MonthName', y='SaleAmount (ExVat)', color='Year', 
+                               markers=True, line_shape="spline", color_discrete_sequence=px.colors.qualitative.Bold), use_container_width=True)
 
     with col_r:
-        st.subheader("🍕 Product Mix (Cleaned Names)")
+        st.subheader("🍕 Product Sales Mix")
         p_df = f_df.groupby('PrName')['SaleAmount (ExVat)'].sum().reset_index()
         st.plotly_chart(px.pie(p_df, values='SaleAmount (ExVat)', names='PrName', hole=0.5, 
-                               color_discrete_sequence=[KOON_ORANGE, "#333333", "#CCCCCC", "#EEEEEE"]), use_container_width=True)
+                               color_discrete_sequence=[KOON_ORANGE, "#003f5c", "#bc5090", "#CCCCCC"]), use_container_width=True)
 
-    # --- SECTION: FORECASTING ---
+    # --- DETAILED MATRIX ---
     st.divider()
-    st.subheader("🔮 3-Month Sales Trend Forecast")
+    with st.expander("🔍 Detailed Performance Matrix (รายสาขา)"):
+        pivot = f_df.pivot_table(index='BrName', columns='PrName', values='SaleAmount (ExVat)', aggfunc='sum', fill_value=0)
+        st.dataframe(pivot.style.background_gradient(cmap='Oranges'), use_container_width=True)
+
+    # --- FORECASTING (BOTTOM) ---
+    st.divider()
+    st.subheader("🔮 3-Month Sales Trend Forecast (การทำนายยอดขาย)")
     if has_sklearn:
         ts = f_df.groupby(['Year', 'Month'])['SaleAmount (ExVat)'].sum().reset_index()
         if len(ts) >= 3:
@@ -153,16 +158,14 @@ if df is not None:
             fig_f = go.Figure()
             fig_f.add_trace(go.Scatter(x=ts.index, y=y, name="ยอดขายจริง", line=dict(color=KOON_ORANGE, width=3)))
             fig_f.add_trace(go.Scatter(x=list(range(len(ts)-1, len(ts)+2)), y=[y[-1]]+list(preds), 
-                                     name="ทำนายอนาคต", line=dict(color='#333333', width=4, dash='dot')))
-            fig_f.update_layout(template="plotly_white", xaxis_title="Time (Months)")
+                                     name="แนวโน้มทำนาย", line=dict(color='#333333', width=4, dash='dot')))
+            fig_f.update_layout(template="plotly_white", xaxis_title="Timeline (Months)", yaxis_title="Sales (THB)")
             st.plotly_chart(fig_f, use_container_width=True)
+            st.caption("เส้นประสีดำคือการทำนายเชิงสถิติล่วงหน้า 3 เดือน")
         else:
             st.warning("ข้อมูลไม่เพียงพอสำหรับการพยากรณ์")
-
-    # --- DETAILED MATRIX ---
-    with st.expander("🔍 Detailed Sales Matrix"):
-        pivot = f_df.pivot_table(index='BrName', columns='PrName', values='SaleAmount (ExVat)', aggfunc='sum', fill_value=0)
-        st.dataframe(pivot.style.background_gradient(cmap='Oranges'), use_container_width=True)
+    else:
+        st.info("ระบบ Forecasting จะทำงานเมื่อ scikit-learn ถูกติดตั้งเรียบร้อย")
 
 else:
-    st.error("ไม่สามารถโหลดข้อมูลได้")
+    st.error("ไม่พบข้อมูลสำหรับการสร้าง Dashboard")
